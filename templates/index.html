@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IslamiaGPT - Islamia College Peshawar</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="page-hint">This simulates the college website. Click the chat bubble bottom-right.</div>
+
+<!-- Floating launcher button -->
+<button id="launcher">
+  <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Islamia College Peshawar logo" class="launcher-logo">
+  Chat with us
+</button>
+
+<!-- Chat panel -->
+<div id="panel">
+  <header>
+    <div class="header-left">
+      <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Islamia College Peshawar logo" class="header-logo">
+      <span>Islamia College GPT</span>
+    </div>
+    <button id="clear-btn" onclick="clearChat()">🗑</button>
+    <button id="close-btn">&#10005;</button>
+  </header>
+
+  <div id="messages">
+    <div class="msg bot">Assalam-o-Alaikum! I'm the Islamia College Peshawar assistant. How can I help you today?</div>
+  </div>
+
+  <div id="suggestions">
+    <button onclick="askSuggestion('What programs does Islamia College offer?')">
+        🎓 Programs
+    </button>
+
+    <button onclick="askSuggestion('How can I apply for admission?')">
+        📝 Admissions
+    </button>
+
+    <button onclick="askSuggestion('What scholarships are available?')">
+        💰 Scholarships
+    </button>
+
+    <button onclick="askSuggestion('What is the admission office phone number?')">
+        📞 Contact
+    </button>
+</div>
+
+  <div id="input-row">
+    <input id="input" type="text" placeholder="Type your message here...">
+    <button id="send-btn">Send</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

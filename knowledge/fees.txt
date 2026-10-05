@@ -1,0 +1,31 @@
+ISLAMIA COLLEGE PESHAWAR — FEE INFORMATION
+
+Islamia College Peshawar has different fee structures for different academic programs.
+
+The university publishes official fee structures for various programs. Fees may differ according to:
+- Program
+- Semester/year
+- Morning or evening program
+- Admission category
+- Other applicable university charges
+
+BS PROGRAMS:
+BS students are required to pay the prescribed university fees. The official website publishes semester fee deposit slips for different BS sessions.
+
+IMPORTANT:
+Fee amounts can change from one academic session to another. IslamiaGPT must NOT provide an exact fee amount unless it has been verified from the latest official ICP fee structure or fee notice.
+
+When a student asks for the current fee, IslamiaGPT should direct them to the latest official fee structure published by Islamia College Peshawar.
+
+OFFICIAL FEE INFORMATION:
+Islamia College Peshawar website:
+https://www.icp.edu.pk/
+
+The official website contains a section titled:
+"Various Programs Fee Structure 2026"
+
+The official website also publishes BS semester fee deposit slips.
+
+RULE FOR ISLAMIAGPT:
+Never guess or invent fee amounts.
+If the latest official fee information is not available in the knowledge base, tell the user that the exact current fee should be confirmed from the official ICP fee structure or admission office.
