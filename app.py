@@ -1,51 +1,118 @@
 import os
-import chromadb
+import re
 
-from sentence_transformers import SentenceTransformer
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
 from dotenv import load_dotenv
 
+
+# -----------------------------
+# Basic setup
+# -----------------------------
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VECTOR_DB_DIR = os.path.join(BASE_DIR, "islamia_vector_db")
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+# -----------------------------
+# Load knowledge files
+# -----------------------------
 
-chroma_client = chromadb.PersistentClient(path=VECTOR_DB_DIR)
+KNOWLEDGE_DIR = os.path.join(BASE_DIR, "knowledge")
 
-collection = chroma_client.get_collection("islamia_knowledge")
+knowledge_chunks = []
 
-def retrieve_knowledge(question):
-    query_embedding = embedding_model.encode(question).tolist()
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=5,
-        include=["documents", "metadatas", "distances"]
+def load_knowledge():
+    knowledge_chunks.clear()
+
+    if not os.path.exists(KNOWLEDGE_DIR):
+        return
+
+    for filename in os.listdir(KNOWLEDGE_DIR):
+
+        if not filename.endswith(".txt"):
+            continue
+
+        filepath = os.path.join(KNOWLEDGE_DIR, filename)
+
+        with open(filepath, "r", encoding="utf-8") as file:
+            text = file.read()
+
+        paragraphs = [
+            paragraph.strip()
+            for paragraph in text.split("\n\n")
+            if paragraph.strip()
+        ]
+
+        for paragraph in paragraphs:
+
+            knowledge_chunks.append({
+                "text": paragraph,
+                "source": filename
+            })
+
+
+load_knowledge()
+
+
+# -----------------------------
+# Lightweight retrieval
+# -----------------------------
+
+def tokenize(text):
+    return set(
+        re.findall(
+            r"\b[a-zA-Z0-9]+(?:[-'][a-zA-Z0-9]+)*\b",
+            text.lower()
+        )
     )
 
-    THRESHOLD = 1.0
 
-    relevant_documents = []
-    seen_documents = set()
+def retrieve_knowledge(question):
 
-    for i, document in enumerate(results["documents"][0]):
+    question_words = tokenize(question)
 
-        distance = results["distances"][0][i]
-
-        if distance < THRESHOLD and document not in seen_documents:
-            relevant_documents.append(document)
-            seen_documents.add(document)
-
-    if not relevant_documents:
+    if not question_words:
         return "NO_RELEVANT_INFORMATION"
 
-    return "\n\n".join(relevant_documents[:3])
+    scored_chunks = []
+
+    for chunk in knowledge_chunks:
+
+        chunk_words = tokenize(chunk["text"])
+
+        common_words = question_words.intersection(chunk_words)
+
+        score = len(common_words)
+
+        if score > 0:
+            scored_chunks.append(
+                (score, chunk["text"], chunk["source"])
+            )
+
+    scored_chunks.sort(
+        key=lambda item: item[0],
+        reverse=True
+    )
+
+    if not scored_chunks:
+        return "NO_RELEVANT_INFORMATION"
+
+    selected = scored_chunks[:3]
+
+    return "\n\n".join(
+        f"Source: {source}\n{text}"
+        for score, text, source in selected
+    )
+
+
+# -----------------------------
+# Hugging Face
+# -----------------------------
 
 client = OpenAI(
     base_url="https://router.huggingface.co/v1",
@@ -55,25 +122,28 @@ client = OpenAI(
 MODEL = "Qwen/Qwen2.5-7B-Instruct:featherless-ai"
 
 
-
+# -----------------------------
+# System prompt
+# -----------------------------
 
 system_prompt = """
 You are IslamiaGPT, an AI assistant designed to help students, applicants,
 faculty, staff, and visitors of Islamia College Peshawar.
 
-CODE RESTRICTION: Never write, generate, explain, or provide instructions for programming code.
- If the user asks for Python, JavaScript, HTML, CSS, or any other code, reply only: “Sorry, I can’t help with writing code.” Do not give steps, concepts, examples, or alternatives.
-   Keep all responses to a maximum of 2–3 short lines.
-  If the user asks a question unrelated to Islamia College Peshawar, reply only:
-     "sorry, I dont't have any information about it,I can help you if you have any question about Islamia college".
+CODE RESTRICTION:
+Never write, generate, explain, or provide instructions for programming code.
+If the user asks for Python, JavaScript, HTML, CSS, or any other code, reply only:
+“Sorry, I can’t help with writing code.”
+Do not give steps, concepts, examples, or alternatives.
 
-Your primary purpose is to provide helpful, clear, accurate, and professional
-assistance about Islamia College Peshawar.
+Keep all responses to a maximum of 2–3 lines.
+
+If the user asks a question unrelated to Islamia College Peshawar, reply only:
+"sorry, I don't have any information about it, I can help you if you have any question about Islamia College".
 
 PERSONALITY:
 - Be friendly, respectful, professional, and helpful.
-- Use simple language that students can easily understand.
-- Keep answers concise but provide enough explanation when necessary.
+- Use simple language.
 - Do not sound robotic.
 - Do not unnecessarily repeat information.
 
@@ -97,30 +167,13 @@ IMPORTANT ACCURACY RULES:
 - Never invent or guess official college information.
 - Never make up admission dates, fees, eligibility criteria, contact numbers,
   deadlines, policies, or regulations.
-- If you do not have reliable information, clearly say that you do not
-  currently have enough verified information.
-- Do not present assumptions as facts.
-- When official college documents or a knowledge base are provided later,
-  prioritize that information over general knowledge.
-  - If the retrieved knowledge says "NO_RELEVANT_INFORMATION", do not answer from general knowledge. 
-  Say that you do not have enough verified information in the Islamia College knowledge base.
-
-RETRIEVED KNOWLEDGE:
-
-The information provided after this system prompt is retrieved from the verified
-Islamia College Peshawar knowledge base.
-
-Use the retrieved information as the primary source for answering college-related
-questions.
-
-Never invent information that is not present in the retrieved knowledge.
-
-If the retrieved knowledge says "NO_RELEVANT_INFORMATION", say that you do not
-have enough verified information in the Islamia College knowledge base.
+- Use only the verified knowledge supplied below.
+- If the knowledge does not contain the answer, say that you do not have
+  enough verified information.
+- Never present assumptions as facts.
 
 CONVERSATION:
 - Remember relevant information from the current conversation.
-- Use previous messages when answering follow-up questions.
 - If the question is unclear, ask for clarification.
 
 LANGUAGE:
@@ -134,15 +187,16 @@ SAFETY:
 - Do not claim to be a human, faculty member, administrator, or official
   representative.
 - You are an AI assistant.
-- For information requiring official confirmation, advise the user to verify
-  it through Islamia College's official channels.
 
 IDENTITY:
 Your name is IslamiaGPT.
 You are an AI-assisted information service for Islamia College Peshawar.
-
-
 """
+
+
+# -----------------------------
+# Flask routes
+# -----------------------------
 
 @app.route("/")
 def home():
@@ -151,36 +205,59 @@ def home():
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
+
     data = request.get_json()
+
     user_message = data.get("message", "").strip()
 
     if not user_message:
-        return jsonify({"reply": "Please type a message."})
+        return jsonify({
+            "reply": "Please type a message."
+        })
 
     context = retrieve_knowledge(user_message)
 
     try:
+
         completion = client.chat.completions.create(
             model=MODEL,
             messages=[
                 {
                     "role": "system",
-                   "content": system_prompt
-+ "\n\nRELEVANT VERIFIED COLLEGE KNOWLEDGE:\n"
-+ context,
+                    "content": (
+                        system_prompt
+                        + "\n\nRELEVANT VERIFIED COLLEGE KNOWLEDGE:\n"
+                        + context
+                    )
                 },
-                {"role": "user", "content": user_message},
+                {
+                    "role": "user",
+                    "content": user_message
+                }
             ],
             max_tokens=150,
+            temperature=0.2
         )
+
         reply = completion.choices[0].message.content
 
     except Exception as e:
+
         print("Hugging Face API error:", e)
-        reply = "Sorry, I'm having trouble responding right now. Please try again."
 
-    return jsonify({"reply": reply})
+        reply = (
+            "Sorry, I'm having trouble responding right now. "
+            "Please try again."
+        )
 
+    return jsonify({
+        "reply": reply
+    })
+
+
+# -----------------------------
+# Run locally
+# -----------------------------
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
